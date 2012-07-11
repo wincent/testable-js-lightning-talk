@@ -2,7 +2,7 @@
 %html{:lang => "en"}
   %head
     %meta{:charset => "utf-8"}/
-    %title Presentation title
+    %title Writing testable JS with Jasmine
     %meta{:content => "Greg Hurrell", :name => "author"}/
     %link{:href => "http://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic", :rel => "stylesheet", :type => "text/css"}/
     %link{:href => "reveal/css/reset.css", :rel => "stylesheet"}/
@@ -18,22 +18,242 @@
       .slides
 
         %section
-          %h1 Presentation title
+          %h1 Writing testable JS with Jasmine
 
         %section
-          %h2 Slide title
+          %h2 The state of play
           %ul
             %li.fragment
-              A bullet point
+              Legacy JS code in code base
             %li.fragment
-              Another bullet point
-              %pre.fragment
-                %code.language-ruby{:contenteditable => ""}
+              JS is considered "too open", because anything can be mutated
+            %li.fragment
+              Overreacting, we end up hiding everything in closures, and
+              aggressively namespacing
+            %li.fragment
+              This makes testing difficult
+
+        %section
+          %h2 "Hide everything" anti-pattern
+          %ul
+            %li.fragment
+              Everything is hidden inside a closure, except for one function
+              which is exported and called immediately on document ready
+              %pre
+                %code.language-javascript{:contenteditable => ''}
                   :preserve
-                    # this is Ruby code
-                    &lt;%= @cause.name %&gt;
+                    $.namespace('Causes.Account.Privacy', (function() {
+                      var internalVar1;
+                      var internalVar2;
+                      function init() { /* stuff */ }
+                      function set_spider_visibility() { /* stuff */ }
+                      function set_open_graph_visibility() { /* stuff */ }
+                      function set_open_graph_perms_listener() { /* stuff */ }
+
+                      return {
+                        init: init
+                      };
+                    })());
+
+                    $(Causes.Account.Privacy.init);
             %li.fragment
-              Another bullet point
+              Hard to test because it effectively makes the code a "black box"
+            %li.fragment
+              Forced into using a simplistic state-based test (provide DOM,
+              insert JS, inspect DOM after the fact)
+
+        %section
+          %h2 The test-friendly way: be public by default
+          %ul
+            %li.fragment
+              Increase the surface area of our APIs, so that Jasmine has
+              something to interact with
+            %li.fragment
+              Decompose things into simple units that can be tested
+              independently
+            %li.fragment
+              We're writing code for our own use, not publishing a framework,
+              so we don't need an inviolable separation of "public" and
+              "private" code
+            %li.fragment
+              Optionally could use the Closure Compiler to enforce the
+              public/private distinction; see Appendix A of <em>Closure: The
+              Definitive Guide</em> (O'Reilly)
+
+        %section
+          %h2 Our implementation of prototypal inheritance
+          %ul
+            %li.fragment
+              We use
+              %code.language-javascript{:contenteditable => ''}
+                Causes.classify()
+              and
+              %code.language-javascript{:contenteditable => ''}
+                subclass()
+              as a convenient API for defining "classes"
+              %pre
+                %code.language-javascript{:contenteditable => ''}
+                  :preserve
+                    Causes.Paginator = Causes.classify({
+                      // defaults on the prototype
+                      targetSelector : '#item-list',
+                      buttonSelector : '#see-more',
+
+                      // functions
+
+                      // constructor, called automatically
+                      init : function(opts) {
+                        this.extendOptions(opts); // override defaults
+                      },
+
+                      clickHandler : function() { /* ... */ },
+                      loadContent: function() { /* ... */ },
+                      replaceContent: function() { /* ... */ }
+                    });
+
+                    Causes.FancyPaginator = Causes.Paginator.subclass({
+                      replaceConent: function() { /* override */ }
+                    });
+
+        %section
+          %h2 Instantiating objects
+          %ul
+            %li
+              We're currently doing this inline, near the markup that the logic
+              relates to, as this provides nice modularity
+              %pre
+                %code.language-html{:contenteditable => ''}
+                  :preserve
+                    &lt;div id='#sidebar-item-list' /&gt;
+                    &lt;div id='#see-more' /&gt;
+                    &lt;script&gt;
+                      new Causes.Paginator({ targetSelector: '#sidebar-item-list' });
+                    &lt;/script&gt;
+            %li.fragment
+              As we're moving our JS towards the bottom of the page, this will
+              have to change
+
+
+        %section
+          %h2 The Jasmine DSL; RSpec-style BDD for JavaScript
+          %pre
+            %code.language-javascript{:contenteditable => ''}
+              :preserve
+                describe('Causes.Paginator', function() {
+                  var paginator;
+
+                  beforeEach(function() { /* set-up */ });
+                  afterEach(function() { /* tear-down */ });
+
+                  describe('loadContent', function() {
+                    it('show the content div') {
+                      paginator.loadContent();
+                      expect($('#item-list').is(':visible')).toBeFalsey();
+                    };
+                });
+          %li
+            It's verbose; use your editor's snippet feature to make working with the DSL less painful; see my
+            %a{:href => 'https://github.com/wincent/wincent/blob/master/.vim/snippets/jasmine.snippets'} .vim/snippets/jasmine.snippets
+            file for an example
+          %li
+            See our spec suite for examples of stubbing time, and using spies as
+            test doubles
+
+        %section
+          %h2 Dealing with DOM
+          %ul
+            %li.fragment
+              Most JS is intimately tied to DOM manipulation, so we need a way
+              of providing suitable DOM fragments to Jasmine
+            %li.fragment
+              We have RSpec-side helpers for this purpose:
+              %pre
+                %code.language-ruby{:contenteditable => ''}
+                  :preserve
+                    describe SomeController do
+                      render_views
+
+                      describe '#show' do
+                        it 'saves a fixture', :jasmine => true do
+                          get :show
+                          response.should be_success # sanity check
+                          save_fixture(response.body, 'snippet_filename')
+                          save_fixture(html_for('#sidebar'), 'other_snippet')
+                        end
+                      end
+                    end
+            %li.fragment
+              We have Rake tasks to help:
+              %pre
+                %code.language-bash{:contenteditable => ''}
+                  :preserve
+                    rake jasmine                   # Run the Jasmine server
+                    rake jasmine:fixtures:clear    # Clears the Jasmine fixures
+                    rake jasmine:fixtures:generate # Generates the Jasmine fixtures
+                    rake jasmine:fixtures          # Clears then generates the Jasmine fixtures
+
+        %section
+          %h2 DOM loading on the Jasmine side
+          %ul
+            %li.fragment
+              Fragments can be loaded like this:
+              %pre
+                %code.language-javascripts{:contenteditable => ''}
+                  :preserve
+                    beforeEach(function() {
+                      // loads the fragment into #jasmine_content
+                      spec.loadFixture('snippet_filename');
+                    });
+            %li.fragment
+              The
+              %code.language-javascript{:contenteditable => ''} #jasmine_content
+              div is automatically cleared after each example
+
+        %section
+          %h2 Further reading
+          %ul
+            %li
+              Official intro to Jasmine:<br>
+              %a{:href => 'http://pivotal.github.com/jasmine/'}
+                pivotal.github.com/jasmine/
+            %li
+              Jasmine wiki<br>
+              %a{:href => 'https://github.com/pivotal/jasmine/wiki'}
+                github.com/pivotal/jasmine/wiki
+            %li
+              jasmine-jquery (matchers, fixture-loading):<br>
+              %a{:href => 'https://github.com/velesin/jasmine-jquery/'}
+                github.com/velesin/jasmine-jquery/
+
+        %section
+          %h2 Further reading
+          %ul
+            %li
+              JavaScript patterns:
+              %ul
+                %li
+                  %a{:href => 'http://www.addyosmani.com/resources/essentialjsdesignpatterns/book/'}
+                    www.addyosmani.com/resources/essentialjsdesignpatterns/book/
+                %li
+                  %a{:href => 'http://shichuan.github.com/javascript-patterns/'}
+                    shichuan.github.com/javascript-patterns/
+                %li
+                  %a{:href => 'http://www.jspatterns.com/'}
+                    www.jspatterns.com/
+                %li
+                  %a{:href=> 'http://javascriptpatterns.org/'}
+                    javascriptpatterns.org/
+                %li
+                  %a{:href => 'http://www.klauskomenda.com/code/javascript-programming-patterns/'}
+                    www.klauskomenda.com/code/javascript-programming-patterns/
+
+        %section
+          %h2 Thanks
+          %ul
+            %li
+              You can grab the source for these slides at:
+              %a{:href => 'https://github.com/ghurrell/testable-js-lightning-talk'}
+                github.com/ghurrell/testable-js-lightning-talk
 
       /
         required for correct operation of reveal.js,
