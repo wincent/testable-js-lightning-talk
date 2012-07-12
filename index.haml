@@ -78,7 +78,9 @@
             %li.fragment
               Optionally could use the Closure Compiler to enforce the
               public/private distinction; see Appendix A of <em>Closure: The
-              Definitive Guide</em> (O'Reilly)
+              Definitive Guide</em> (O'Reilly), also published
+              %a{:href => 'http://bolinfest.com/javascript/inheritance.php'}
+                on the author's blog
 
         %section
           %h2 Our implementation of prototypal inheritance
@@ -208,6 +210,21 @@
               The
               %code.language-javascript{:contenteditable => ''} #jasmine_content
               div is automatically cleared after each example
+
+        %section
+          %h2 Food for thought
+          %ul
+            %li.fragment
+              As our site is so tightly integrated with Facebook, we're forced
+              to stub a lot and rely on spies
+            %li.fragment
+              Jasmine makes it easy to do unit-level tests, but higher-level
+              integration tests are difficult
+            %li.fragment
+              Much of the "testing sensibility" that you've cultivated working
+              with Ruby/RSpec is transferrable to the world of JS
+            %li.fragment
+              Always be mindful fo the cost-benefit ratio when writing tests
 
         %section
           %h2 Further reading
