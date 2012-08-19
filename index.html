@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang='en'>
+  <head>
+    <meta charset='utf-8' />
+    <title>Writing testable JS with Jasmine</title>
+    <meta content='Greg Hurrell' name='author' />
+    <link href='http://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic' rel='stylesheet' type='text/css' />
+    <link href='reveal/css/reset.css' rel='stylesheet' />
+    <link href='reveal/css/main.css' rel='stylesheet' />
+    <link href='highlight/src/styles/solarized_dark.css' rel='stylesheet' />
+    <!-- overrides for default reveal styles -->
+    <style type='text/css'>
+      /*<![CDATA[*/
+        #reveal pre {
+          font-size: 24px;
+        }
+      /*]]>*/
+    </style>
+  </head>
+  <body>
+    <div class='reveal'>
+      <div class='slides'>
+        <section>
+          <h1>Writing testable JS with Jasmine</h1>
+        </section>
+        <section>
+          <h2>The state of play</h2>
+          <ul>
+            <li class='fragment'>
+              Legacy JS code in code base
+            </li>
+            <li class='fragment'>
+              JS is considered "too open", because anything can be mutated
+            </li>
+            <li class='fragment'>
+              Overreacting, we end up hiding everything in closures, and
+              aggressively namespacing
+            </li>
+            <li class='fragment'>
+              This makes testing difficult
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>"Hide everything" anti-pattern</h2>
+          <ul>
+            <li class='fragment'>
+              Everything is hidden inside a closure, except for one function
+              which is exported and called immediately on document ready
+              <pre><code class='language-javascript' contenteditable=''>$.namespace('Causes.Account.Privacy', (function() {&#x000A;  var internalVar1;&#x000A;  var internalVar2;&#x000A;  function init() { /* stuff */ }&#x000A;  function set_spider_visibility() { /* stuff */ }&#x000A;  function set_open_graph_visibility() { /* stuff */ }&#x000A;  function set_open_graph_perms_listener() { /* stuff */ }&#x000A;&#x000A;  return {&#x000A;    init: init&#x000A;  };&#x000A;})());&#x000A;&#x000A;$(Causes.Account.Privacy.init);</code></pre>
+            </li>
+            <li class='fragment'>
+              Hard to test because it effectively makes the code a "black box"
+            </li>
+            <li class='fragment'>
+              Forced into using a simplistic state-based test (provide DOM,
+              insert JS, inspect DOM after the fact)
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>The test-friendly way: be public by default</h2>
+          <ul>
+            <li class='fragment'>
+              Increase the surface area of our APIs, so that Jasmine has
+              something to interact with
+            </li>
+            <li class='fragment'>
+              Decompose things into simple units that can be tested
+              independently
+            </li>
+            <li class='fragment'>
+              We're writing code for our own use, not publishing a framework,
+              so we don't need an inviolable separation of "public" and
+              "private" code
+            </li>
+            <li class='fragment'>
+              Optionally could use the Closure Compiler to enforce the
+              public/private distinction; see Appendix A of <em>Closure: The
+              Definitive Guide</em> (O'Reilly), also published
+              <a href='http://bolinfest.com/javascript/inheritance.php'>
+                on the author's blog
+              </a>
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Our implementation of prototypal inheritance</h2>
+          <ul>
+            <li class='fragment'>
+              We use
+              <code class='language-javascript' contenteditable=''>Causes.classify()</code>
+              and
+              <code class='language-javascript' contenteditable=''>subclass()</code>
+              as a convenient API for defining "classes"
+              <pre><code class='language-javascript' contenteditable=''>Causes.Paginator = Causes.classify({&#x000A;  // defaults on the prototype&#x000A;  targetSelector : '#item-list',&#x000A;  buttonSelector : '#see-more',&#x000A;&#x000A;  // functions&#x000A;&#x000A;  // constructor, called automatically&#x000A;  init : function(opts) {&#x000A;    this.extendOptions(opts); // override defaults&#x000A;  },&#x000A;&#x000A;  clickHandler : function() { /* ... */ },&#x000A;  loadContent: function() { /* ... */ },&#x000A;  replaceContent: function() { /* ... */ }&#x000A;});&#x000A;&#x000A;Causes.FancyPaginator = Causes.Paginator.subclass({&#x000A;  replaceConent: function() { /* override */ }&#x000A;});&#x000A;</code></pre>
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Instantiating objects</h2>
+          <ul>
+            <li>
+              We're currently doing this inline, near the markup that the logic
+              relates to, as this provides nice modularity
+              <pre><code class='language-html' contenteditable=''>&lt;div id='#sidebar-item-list' /&gt;&#x000A;&lt;div id='#see-more' /&gt;&#x000A;&lt;script&gt;&#x000A;  new Causes.Paginator({ targetSelector: '#sidebar-item-list' });&#x000A;&lt;/script&gt;</code></pre>
+            </li>
+            <li class='fragment'>
+              As we're moving our JS towards the bottom of the page, this will
+              have to change
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>The Jasmine DSL; RSpec-style BDD for JavaScript</h2>
+          <pre><code class='language-javascript' contenteditable=''>describe('Causes.Paginator', function() {&#x000A;  var paginator;&#x000A;&#x000A;  beforeEach(function() { /* set-up */ });&#x000A;  afterEach(function() { /* tear-down */ });&#x000A;&#x000A;  describe('loadContent', function() {&#x000A;    it('show the content div') {&#x000A;      paginator.loadContent();&#x000A;      expect($('#item-list').is(':visible')).toBeFalsey();&#x000A;    };&#x000A;});</code></pre>
+          <li>
+            It's verbose; use your editor's snippet feature to make working with the DSL less painful; see my
+            <a href='https://github.com/wincent/wincent/blob/master/.vim/snippets/jasmine.snippets'>.vim/snippets/jasmine.snippets</a>
+            file for an example
+          </li>
+          <li>
+            See our spec suite for examples of stubbing time, and using spies as
+            test doubles
+          </li>
+        </section>
+        <section>
+          <h2>Dealing with DOM</h2>
+          <ul>
+            <li class='fragment'>
+              Most JS is intimately tied to DOM manipulation, so we need a way
+              of providing suitable DOM fragments to Jasmine
+            </li>
+            <li class='fragment'>
+              We have RSpec-side helpers for this purpose:
+              <pre><code class='language-ruby' contenteditable=''>describe SomeController do&#x000A;  render_views&#x000A;&#x000A;  describe '#show' do&#x000A;    it 'saves a fixture', :jasmine => true do&#x000A;      get :show&#x000A;      response.should be_success # sanity check&#x000A;      save_fixture(response.body, 'snippet_filename')&#x000A;      save_fixture(html_for('#sidebar'), 'other_snippet')&#x000A;    end&#x000A;  end&#x000A;end</code></pre>
+            </li>
+            <li class='fragment'>
+              We have Rake tasks to help:
+              <pre><code class='language-bash' contenteditable=''>rake jasmine                   # Run the Jasmine server&#x000A;rake jasmine:fixtures:clear    # Clears the Jasmine fixures&#x000A;rake jasmine:fixtures:generate # Generates the Jasmine fixtures&#x000A;rake jasmine:fixtures          # Clears then generates the Jasmine fixtures&#x000A;</code></pre>
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>DOM loading on the Jasmine side</h2>
+          <ul>
+            <li class='fragment'>
+              Fragments can be loaded like this:
+              <pre><code class='language-javascripts' contenteditable=''>beforeEach(function() {&#x000A;  // loads the fragment into #jasmine_content&#x000A;  spec.loadFixture('snippet_filename');&#x000A;});</code></pre>
+            </li>
+            <li class='fragment'>
+              The
+              <code class='language-javascript' contenteditable=''>#jasmine_content</code>
+              div is automatically cleared after each example
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Food for thought</h2>
+          <ul>
+            <li class='fragment'>
+              As our site is so tightly integrated with Facebook, we're forced
+              to stub a lot and rely on spies
+            </li>
+            <li class='fragment'>
+              Jasmine makes it easy to do unit-level tests, but higher-level
+              integration tests are difficult
+            </li>
+            <li class='fragment'>
+              Much of the "testing sensibility" that you've cultivated working
+              with Ruby/RSpec is transferrable to the world of JS
+            </li>
+            <li class='fragment'>
+              Always be mindful fo the cost-benefit ratio when writing tests
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Further reading</h2>
+          <ul>
+            <li>
+              Official intro to Jasmine:<br>
+              <a href='http://pivotal.github.com/jasmine/'>
+                pivotal.github.com/jasmine/
+              </a>
+            </li>
+            <li>
+              Jasmine wiki<br>
+              <a href='https://github.com/pivotal/jasmine/wiki'>
+                github.com/pivotal/jasmine/wiki
+              </a>
+            </li>
+            <li>
+              jasmine-jquery (matchers, fixture-loading):<br>
+              <a href='https://github.com/velesin/jasmine-jquery/'>
+                github.com/velesin/jasmine-jquery/
+              </a>
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Further reading</h2>
+          <ul>
+            <li>
+              JavaScript patterns:
+              <ul>
+                <li>
+                  <a href='http://www.addyosmani.com/resources/essentialjsdesignpatterns/book/'>
+                    www.addyosmani.com/resources/essentialjsdesignpatterns/book/
+                  </a>
+                </li>
+                <li>
+                  <a href='http://shichuan.github.com/javascript-patterns/'>
+                    shichuan.github.com/javascript-patterns/
+                  </a>
+                </li>
+                <li>
+                  <a href='http://www.jspatterns.com/'>
+                    www.jspatterns.com/
+                  </a>
+                </li>
+                <li>
+                  <a href='http://javascriptpatterns.org/'>
+                    javascriptpatterns.org/
+                  </a>
+                </li>
+                <li>
+                  <a href='http://www.klauskomenda.com/code/javascript-programming-patterns/'>
+                    www.klauskomenda.com/code/javascript-programming-patterns/
+                  </a>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Thanks</h2>
+          <ul>
+            <li>
+              You can grab the source for these slides at:
+              <a href='https://github.com/ghurrell/testable-js-lightning-talk'>
+                github.com/ghurrell/testable-js-lightning-talk
+              </a>
+            </li>
+          </ul>
+        </section>
+      </div>
+      <!--
+        required for correct operation of reveal.js,
+        even if we don't want controls
+      -->
+      <aside class='controls'>
+        <a class='left' href='#'>&#x25c4;</a>
+        <a class='right' href='#'>&#x25ba;</a>
+        <a class='up' href='#'>&#x25b2;</a>
+        <a class='down' href='#'>&#x25bc;</a>
+      </aside>
+    </div>
+    <script src='reveal/js/reveal.min.js'></script>
+    <script src='highlight/build/highlight.pack.js'></script>
+    <script type='text/javascript'>
+      //<![CDATA[
+        Reveal.initialize({
+          controls: false,
+          progress: false,
+          history: true,
+          mouseWheel: false,
+          rollingLinks: false,
+        });
+        hljs.initHighlightingOnLoad();
+      //]]>
+    </script>
+  </body>
+</html>
